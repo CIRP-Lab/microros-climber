@@ -12,6 +12,8 @@
 HardwareSerial RoboSerial(1);   // UART1
 RoboClaw roboclaw(&RoboSerial, 10000);
 
+const int LINACTSWITCH = D2;
+
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 Adafruit_ICM20948 icm;
 
@@ -27,6 +29,7 @@ void tcaselect(uint8_t i) {
 
 void setup() {
   Serial.begin(38400);   // USB debug
+  pinMode(LINACTSWITCH, INPUT_PULLUP);
 
   // RoboClaw UART
   RoboSerial.begin(
@@ -60,67 +63,67 @@ void setup() {
 
 void loop() {
   VL53L0X_RangingMeasurementData_t measure;
+  // bool safetyTriggered = (digitalRead(LINACTSWITCH) == HIGH);
+  // while (!safetyTriggered) {
+  //   bool safetyTriggered = (digitalRead(LINACTSWITCH) == HIGH);
+    for (uint8_t i = 0; i < 8; i++) {
+      if (i == 3 || i == 4 || i == 5) continue;
+      tcaselect(i);
 
-  for (uint8_t i = 0; i < 8; i++) {
-    if (i == 3 || i == 4 || i == 5) continue;
-    tcaselect(i);
+      lox.rangingTest(&measure, false);
 
-    lox.rangingTest(&measure, false);
+      Serial.print("Port ");
+      Serial.print(i);
+      Serial.print(": ");
 
-    Serial.print("Port ");
-    Serial.print(i);
-    Serial.print(": ");
-
-    if (measure.RangeStatus != 4) {
-      Serial.print(measure.RangeMilliMeter);
-      Serial.println(" mm");
-    } else {
-      Serial.println("Out of range");
+      if (measure.RangeStatus != 4) {
+        Serial.print(measure.RangeMilliMeter);
+        Serial.println(" mm");
+      } else {
+        Serial.println("Out of range");
+      }
     }
-  }
 
-  sensors_event_t accel, gyro, mag, temp;
-  icm.getEvent(&accel, &gyro, &temp, &mag);
-  Serial.println("");
-  Serial.print("Temperature ");
-  Serial.print(temp.temperature);
-  Serial.println(" deg C");
+    sensors_event_t accel, gyro, mag, temp;
+    icm.getEvent(&accel, &gyro, &temp, &mag);
+    Serial.println("");
+    Serial.print("Temperature ");
+    Serial.print(temp.temperature);
+    Serial.println(" deg C");
 
-  /* Display the results (acceleration is measured in m/s^2) */
-  Serial.print("Accel X: ");
-  Serial.print(accel.acceleration.x);
-  Serial.print("\tY: ");
-  Serial.print(accel.acceleration.y);
-  Serial.print(" \tZ: ");
-  Serial.print(accel.acceleration.z);
-  Serial.println(" m/s^2 ");
+    /* Display the results (acceleration is measured in m/s^2) */
+    Serial.print("Accel X: ");
+    Serial.print(accel.acceleration.x);
+    Serial.print("\tY: ");
+    Serial.print(accel.acceleration.y);
+    Serial.print(" \tZ: ");
+    Serial.print(accel.acceleration.z);
+    Serial.println(" m/s^2 ");
 
-  Serial.print("Mag X: ");
-  Serial.print(mag.magnetic.x);
-  Serial.print(" \tY: ");
-  Serial.print(mag.magnetic.y);
-  Serial.print(" \tZ: ");
-  Serial.print(mag.magnetic.z);
-  Serial.println(" uT");
+    Serial.print("Mag X: ");
+    Serial.print(mag.magnetic.x);
+    Serial.print(" \tY: ");
+    Serial.print(mag.magnetic.y);
+    Serial.print(" \tZ: ");
+    Serial.print(mag.magnetic.z);
+    Serial.println(" uT");
 
-  /* Display the results (acceleration is measured in m/s^2) */
-  Serial.print("Gyro X: ");
-  Serial.print(gyro.gyro.x);
-  Serial.print(" \tY: ");
-  Serial.print(gyro.gyro.y);
+    /* Display the results (acceleration is measured in m/s^2) */
+    Serial.print("Gyro X: ");
+    Serial.print(gyro.gyro.x);
+    Serial.print(" \tY: ");
+    Serial.print(gyro.gyro.y);
 
-  unsigned long now = millis();
-  delta_time = now - last_time;
-  last_time = now;
-  Serial.print("Timer: ");
-  Serial.print(delta_time);
-  Serial.println(" ms");
-  Serial.println("----");
+    unsigned long now = millis();
+    delta_time = now - last_time;
+    last_time = now;
+    Serial.print("Timer: ");
+    Serial.print(delta_time);
+    Serial.println(" ms");
+    Serial.println("----");
 
-  roboclaw.BackwardM2(ROBOCLAW_ADDR, 40);
-  delay(2000);
-  roboclaw.ForwardM2(ROBOCLAW_ADDR, 40);
-  delay(2000);
-}
-
-
+    // roboclaw.BackwardM1(ROBOCLAW_ADDR, 40);
+    // delay(2000);
+    roboclaw.ForwardM1(ROBOCLAW_ADDR, 100);
+  // }
+}  
