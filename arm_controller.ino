@@ -63,9 +63,9 @@ void setup() {
 
 void loop() {
   VL53L0X_RangingMeasurementData_t measure;
-  // bool safetyTriggered = (digitalRead(LINACTSWITCH) == HIGH);
-  // while (!safetyTriggered) {
-  //   bool safetyTriggered = (digitalRead(LINACTSWITCH) == HIGH);
+  bool safetyTriggered = (digitalRead(LINACTSWITCH) == LOW);
+  while (!safetyTriggered) {
+    safetyTriggered = (digitalRead(LINACTSWITCH) == LOW);
     for (uint8_t i = 0; i < 8; i++) {
       if (i == 3 || i == 4 || i == 5) continue;
       tcaselect(i);
@@ -125,5 +125,6 @@ void loop() {
     // roboclaw.BackwardM1(ROBOCLAW_ADDR, 40);
     // delay(2000);
     roboclaw.ForwardM1(ROBOCLAW_ADDR, 100);
-  // }
+  }
+  roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
 }  
