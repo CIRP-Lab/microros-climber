@@ -59,6 +59,8 @@ void setup() {
       Serial.println(i);
     }
   }
+  roboclaw.SetM1MaxCurrent(ROBOCLAW_ADDR, 7000);
+
 }
 
 void loop() {
@@ -112,7 +114,7 @@ void loop() {
     Serial.print("Gyro X: ");
     Serial.print(gyro.gyro.x);
     Serial.print(" \tY: ");
-    Serial.print(gyro.gyro.y);
+    Serial.println(gyro.gyro.y);
 
     unsigned long now = millis();
     delta_time = now - last_time;
@@ -124,7 +126,21 @@ void loop() {
 
     // roboclaw.BackwardM1(ROBOCLAW_ADDR, 40);
     // delay(2000);
-    roboclaw.ForwardM1(ROBOCLAW_ADDR, 100);
+    // roboclaw.ForwardM1(ROBOCLAW_ADDR, 75);
+
+    bool valid;
+    uint8_t status;
+    int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
+    if (valid) {
+      Serial.print("encoder 1: ");
+      Serial.println(enc);
+      Serial.print("status: ");
+      Serial.println(status);
+    }
+    else {
+      Serial.println("Encoder reading failed");
+    }
+    delay(2000);
   }
   roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
 }  
