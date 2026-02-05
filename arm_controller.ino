@@ -14,6 +14,9 @@ RoboClaw roboclaw(&RoboSerial, 10000);
 
 const int LINACTSWITCH = D2;
 
+const long PPR = 103.8;
+const int MM_PER_REV = 8;
+
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 Adafruit_ICM20948 icm;
 
@@ -60,7 +63,16 @@ void setup() {
     }
   }
   roboclaw.SetM1MaxCurrent(ROBOCLAW_ADDR, 7000);
-
+  roboclaw.SetM1PositionPID(
+      ROBOCLAW_ADDR,
+      0.5,   // kp
+      0.0,   // ki
+      0.05,  // kd
+      2000,  // kiMax
+      2,     // deadzone
+      0,     // min
+      127    // max
+  );
 }
 
 void loop() {
@@ -140,6 +152,16 @@ void loop() {
     else {
       Serial.println("Encoder reading failed");
     }
+
+    long encoders_to_adv = (int32_t) lround((PPR / MM_PER_REV) * 100); 
+    roboclaw.SpeedAccelDeccelPositionM1(
+      ROBOCLAW_ADDR,
+      2000,   // accel (ticks/sec^2)
+      4000,   // speed (ticks/sec)
+      2000,   // decel
+      enc + encoders_to_adv, // encoder position
+      1       // wait until done
+    );
     delay(2000);
   }
   roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
