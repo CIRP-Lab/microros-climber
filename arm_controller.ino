@@ -74,23 +74,8 @@ void setup() {
       127    // max
    );
   roboclaw.SetM1VelocityPID(ROBOCLAW_ADDR,1,0.5,0.25,44000);
-//      bool valid;
-//    uint8_t status;
-//    int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
-//    if (valid) {
-//      Serial.print("encoder 1: ");
-//      Serial.print("status: ");
-//      Serial.println(enc);
-//      Serial.println(status);
-//    }
-//    else {
-//      Serial.println("Encoder reading failed");
-//    }
-//
-//    long encoders_to_adv = (int32_t) lround((PPR / MM_PER_REV) * 100); 
-//   roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR,200,100,encoders_to_adv,1);
-
 }
+
 
 void loop() {
   VL53L0X_RangingMeasurementData_t measure;
@@ -144,16 +129,9 @@ void loop() {
     Serial.print(gyro.gyro.x);
     Serial.print(" \tY: ");
     Serial.println(gyro.gyro.y);
+    Serial.println("");
 
-    unsigned long now = millis();
-    delta_time = now - last_time;
-    last_time = now;
-    Serial.print("Timer: ");
-    Serial.print(delta_time);
-    Serial.println(" ms");
-    Serial.println("----");
-
-     roboclaw.BackwardM1(ROBOCLAW_ADDR, 5000);
+//     roboclaw.BackwardM1(ROBOCLAW_ADDR, 5000);
   // delay(2000);
 //   roboclaw.ForwardM1(ROBOCLAW_ADDR, 3000);
 
@@ -161,17 +139,28 @@ void loop() {
     uint8_t status;
     int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
     if (valid) {
-      Serial.print("encoder 1: ");
+      Serial.print("encoder 1 parts moved: ");
       Serial.println(enc);
-      Serial.print("status: ");
+      Serial.print("Encoder status: \n");
       Serial.println(status);
     }
     else {
-      Serial.println("Encoder reading failed");
+      Serial.println("Encoder reading failed\n");
     }
 
-    long encoders_to_adv = (int32_t) lround((PPR / MM_PER_REV) * 100); 
-    roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR,100,100,1,1);
+    int32_t encoders_to_adv = (int32_t) lround((PPR / MM_PER_REV) * 15);  
+    Serial.print("encoder to adv: ");
+    Serial.println(encoders_to_adv);
+    roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR,100,100,encoders_to_adv,1);
+
+    unsigned long now = millis();
+    delta_time = now - last_time;
+    last_time = now;
+    Serial.print("Timer: ");
+    Serial.print(delta_time);
+    Serial.println(" ms");
+    Serial.println("----\n");
   }
   roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
+
 }  
