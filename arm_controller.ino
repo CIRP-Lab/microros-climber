@@ -4,15 +4,19 @@
 #include <Adafruit_ICM20X.h>
 #include <Adafruit_Sensor.h>
 
-#include "RoboClaw.h"
+//#include <Basicmicro.h>
+//Basicmicro roboclaw(&Serial1, 10000);
 
 #define TCAADDR 0x70
 
 #define ROBOCLAW_ADDR 0x80
+
+#include "RoboClaw.h"
 HardwareSerial RoboSerial(1);   // UART1
 RoboClaw roboclaw(&RoboSerial, 10000);
 
 const int LINACTSWITCH = D2;
+const int BACKSWITCH = D3;
 
 const long PPR = 103.8;
 const int MM_PER_REV = 8;
@@ -22,7 +26,10 @@ Adafruit_ICM20948 icm;
 
 unsigned long last_time = 0;
 unsigned long delta_time;
-
+bool safetyTriggered;
+bool valid;
+uint8_t status;
+    
 void tcaselect(uint8_t i) {
   if (i > 7) return;
   Wire.beginTransmission(TCAADDR);
@@ -33,15 +40,15 @@ void tcaselect(uint8_t i) {
 void setup() {
   Serial.begin(38400);   // USB debug
   pinMode(LINACTSWITCH, INPUT_PULLUP);
+  pinMode(BACKSWITCH, INPUT_PULLUP);
 
-  // RoboClaw UART
-  RoboSerial.begin(
+   RoboSerial.begin(
     38400,
     SERIAL_8N1,
     D8,   // RX  (optional)
     D9    // TX  (required)
   );
-
+  
   roboclaw.begin(38400);
   Wire.begin();
 
@@ -74,14 +81,25 @@ void setup() {
       127    // max
    );
   roboclaw.SetM1VelocityPID(ROBOCLAW_ADDR,1,0.5,0.25,44000);
+
+  safetyTriggered = digitalRead(BACKSWITCH) == LOW;
+  while (!safetyTriggered) {
+    roboclaw.BackwardM1(ROBOCLAW_ADDR, 25);
+    safetyTriggered = digitalRead(BACKSWITCH) == LOW;
+  }
+  roboclaw.BackwardM1(ROBOCLAW_ADDR, 0);
+  Serial.println("Setup complete");
+  roboclaw.ResetEncoders(ROBOCLAW_ADDR);
+  int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
+  roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR,100,100, 10, 1);
 }
 
 
 void loop() {
   VL53L0X_RangingMeasurementData_t measure;
-  bool safetyTriggered = (digitalRead(LINACTSWITCH) == LOW);
+  safetyTriggered = (digitalRead(LINACTSWITCH) == LOW || digitalRead(BACKSWITCH) == LOW);
   while (!safetyTriggered) {
-    safetyTriggered = (digitalRead(LINACTSWITCH) == LOW);
+    safetyTriggered = (digitalRead(LINACTSWITCH) == LOW || digitalRead(BACKSWITCH) == LOW);
     for (uint8_t i = 0; i < 8; i++) {
       if (i == 3 || i == 4 || i == 5) continue;
       tcaselect(i);
@@ -133,10 +151,8 @@ void loop() {
 
 //     roboclaw.BackwardM1(ROBOCLAW_ADDR, 5000);
   // delay(2000);
-//   roboclaw.ForwardM1(ROBOCLAW_ADDR, 3000);
+//   roboclaw.ForwardM1(ROBOCLAW_ADDR, 500);
 
-    bool valid;
-    uint8_t status;
     int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
     if (valid) {
       Serial.print("encoder 1 parts moved: ");
@@ -151,7 +167,8 @@ void loop() {
     int32_t encoders_to_adv = (int32_t) lround((PPR / MM_PER_REV) * 15);  
     Serial.print("encoder to adv: ");
     Serial.println(encoders_to_adv);
-    roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR,100,100,encoders_to_adv,1);
+    
+    roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR,100,100, 10, 1);
 
     unsigned long now = millis();
     delta_time = now - last_time;
