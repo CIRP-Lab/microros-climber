@@ -168,7 +168,32 @@ void loop() {
     Serial.print("encoder to adv: ");
     Serial.println(encoders_to_adv);
     
-    roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR,100,100, 10, 1);
+    // uint8_t depth1, depth2 = 0;
+    // roboclaw.ReadBuffers(ROBOCLAW_ADDR, depth1, depth2);
+    // Serial.print("\nbuffer1:"); Serial.println(depth1);
+    // Serial.print("\nbuffer 2:"); Serial.println(depth2);
+
+    // if (depth1 == 0) {
+      roboclaw.SpeedAccelDistanceM1(
+        ROBOCLAW_ADDR,
+        100,
+        100,
+        10, // How many 'ticks' to move
+        1
+      );
+    //   Serial.println("\nMoved");
+    // }
+
+    enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
+    if (valid) {
+      Serial.print("encoder 1 parts moved: ");
+      Serial.println(enc);
+      Serial.print("Encoder status: \n");
+      Serial.println(status);
+    }
+    else {
+      Serial.println("Encoder reading failed\n");
+    }
 
     unsigned long now = millis();
     delta_time = now - last_time;
@@ -177,6 +202,7 @@ void loop() {
     Serial.print(delta_time);
     Serial.println(" ms");
     Serial.println("----\n");
+    delay(1000);
   }
   roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
 

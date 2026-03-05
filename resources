@@ -1,8 +1,19 @@
 Motor controller documentation:
 https://github.com/basicmicro/roboclaw_arduino_library
+https://downloads.basicmicro.com/docs/roboclaw_user_manual.pdf
 
 IMU documentation:
 https://github.com/adafruit/Adafruit_ICM20X
 
 motor documentation:
 https://www.gobilda.com/5203-series-yellow-jacket-planetary-gear-motor-3-7-1-ratio-1620-rpm-3-3-5v-encoder/
+
+Notes:
+Must power arduino board first before supplying 12v power to motor controller
+I think 38400 baud rate is required for now
+
+buffer:
+Packet Timeout 
+RoboClaw enforces a 10 ms inter-byte timeout during packet reception. If any byte in a packet arrives more than 10 ms after the previous one, all data received up to that point is discarded. This prevents incomplete or corrupted packets from being processed. To recover from a communication error, introduce a 10 ms delay before sending a new packet. This delay triggers the inter-byte timeout, which automatically clears the receive buffer and returns RoboClaw to a clean state ready for the next command.
+
+Basically, if command is not working, delay 10 ms before sending new read or write command
