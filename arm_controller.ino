@@ -1,3 +1,4 @@
+#include "RoboClaw.h"
 #include <Wire.h>
 #include <Adafruit_VL53L0X.h>
 #include <Adafruit_ICM20948.h>
@@ -11,7 +12,6 @@
 
 #define ROBOCLAW_ADDR 0x80
 
-#include "RoboClaw.h"
 HardwareSerial RoboSerial(1);   // UART1
 RoboClaw roboclaw(&RoboSerial, 10000);
 
@@ -50,39 +50,39 @@ void setup() {
 
   roboclaw.begin(38400);
   Serial.begin(38400);
-//  Wire.begin();
-//
-//  if (!icm.begin_I2C()) {
-//    Serial.println("ICM20948 not found");
-//    while (1);
-//  }
-//  Serial.println("ICM20948 OK");
-//
-//  // Initialize sensors on each port
-//  for (uint8_t i = 0; i < 8; i++) {
-//    tcaselect(i);
-//    if (!lox.begin()) {
-//      Serial.print("Sensor not found on port ");
-//      Serial.println(i);
-//    } else {
-//      Serial.print("Sensor OK on port ");
-//      Serial.println(i);
-//    }
-//  }
-//  roboclaw.SetM1MaxCurrent(ROBOCLAW_ADDR, 7000);
-//
-//  safetyTriggered = digitalRead(BACKSWITCH) == LOW;
-//  while (!safetyTriggered) {
-//    Serial.println("Setting Up...");
-//    roboclaw.BackwardM1(ROBOCLAW_ADDR, 25);
-//    safetyTriggered = digitalRead(BACKSWITCH) == LOW;
-//  }
-//  roboclaw.BackwardM1(ROBOCLAW_ADDR, 0);
-//  Serial.println("Setup complete");
-//  roboclaw.ResetEncoders(ROBOCLAW_ADDR);
-//  delay(2000);
-//    int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR);
-  roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR, 10000, 2000, 10, 1);
+  Wire.begin();
+
+  if (!icm.begin_I2C()) {
+    Serial.println("ICM20948 not found");
+    while (1);
+  }
+  Serial.println("ICM20948 OK");
+
+ // Initialize sensors on each port
+ for (uint8_t i = 0; i < 8; i++) {
+   tcaselect(i);
+   if (!lox.begin()) {
+     Serial.print("Sensor not found on port ");
+     Serial.println(i);
+   } else {
+     Serial.print("Sensor OK on port ");
+     Serial.println(i);
+   }
+ }
+ roboclaw.SetM1MaxCurrent(ROBOCLAW_ADDR, 7000);
+
+  safetyTriggered = digitalRead(BACKSWITCH) == LOW;
+  while (!safetyTriggered) {
+    Serial.println("Setting Up...");
+    roboclaw.BackwardM1(ROBOCLAW_ADDR, 25);
+    safetyTriggered = digitalRead(BACKSWITCH) == LOW;
+  }
+  roboclaw.BackwardM1(ROBOCLAW_ADDR, 0);
+  Serial.println("Setup complete");
+  roboclaw.ResetEncoders(ROBOCLAW_ADDR);
+  delay(2000);
+  int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR);
+  roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR, 10000, 2000, 30, 1);
   delay(2000);
 }
 
@@ -169,7 +169,7 @@ void loop() {
     Serial.print(delta_time);
     Serial.println(" ms");
     Serial.println("----\n");
+    delay(2000);
   }
   roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
-
 }
