@@ -1,3 +1,4 @@
+#include "RoboClaw.h"
 #include <Wire.h>
 #include <Adafruit_VL53L0X.h>
 #include <Adafruit_ICM20948.h>
@@ -11,7 +12,6 @@
 
 #define ROBOCLAW_ADDR 0x80
 
-#include "RoboClaw.h"
 HardwareSerial RoboSerial(1);   // UART1
 RoboClaw roboclaw(&RoboSerial, 10000);
 
@@ -29,7 +29,7 @@ unsigned long delta_time;
 bool safetyTriggered;
 bool valid;
 uint8_t status;
-    
+
 void tcaselect(uint8_t i) {
   if (i > 7) return;
   Wire.beginTransmission(TCAADDR);
@@ -38,18 +38,18 @@ void tcaselect(uint8_t i) {
 }
 
 void setup() {
-  Serial.begin(38400);   // USB debug
   pinMode(LINACTSWITCH, INPUT_PULLUP);
   pinMode(BACKSWITCH, INPUT_PULLUP);
 
-   RoboSerial.begin(
+  RoboSerial.begin(
     38400,
     SERIAL_8N1,
     D8,   // RX  (optional)
     D9    // TX  (required)
   );
-  
+
   roboclaw.begin(38400);
+  Serial.begin(38400);
   Wire.begin();
 
   if (!icm.begin_I2C()) {
@@ -58,40 +58,32 @@ void setup() {
   }
   Serial.println("ICM20948 OK");
 
-  // Initialize sensors on each port
-  for (uint8_t i = 0; i < 8; i++) {
-    tcaselect(i);
-    if (!lox.begin()) {
-      Serial.print("Sensor not found on port ");
-      Serial.println(i);
-    } else {
-      Serial.print("Sensor OK on port ");
-      Serial.println(i);
-    }
-  }
-  roboclaw.SetM1MaxCurrent(ROBOCLAW_ADDR, 7000);
-  roboclaw.SetM1PositionPID(
-    ROBOCLAW_ADDR,
-      1,   // kp
-      0.5,   // ki
-      0.25,  // kd
-      2000,  // kiMax
-      2,     // deadzone
-      0,     // min
-      127    // max
-   );
-  roboclaw.SetM1VelocityPID(ROBOCLAW_ADDR,1,0.5,0.25,44000);
+ // Initialize sensors on each port
+ for (uint8_t i = 0; i < 8; i++) {
+   tcaselect(i);
+   if (!lox.begin()) {
+     Serial.print("Sensor not found on port ");
+     Serial.println(i);
+   } else {
+     Serial.print("Sensor OK on port ");
+     Serial.println(i);
+   }
+ }
+ roboclaw.SetM1MaxCurrent(ROBOCLAW_ADDR, 7000);
 
   safetyTriggered = digitalRead(BACKSWITCH) == LOW;
   while (!safetyTriggered) {
+    Serial.println("Setting Up...");
     roboclaw.BackwardM1(ROBOCLAW_ADDR, 25);
     safetyTriggered = digitalRead(BACKSWITCH) == LOW;
   }
   roboclaw.BackwardM1(ROBOCLAW_ADDR, 0);
   Serial.println("Setup complete");
   roboclaw.ResetEncoders(ROBOCLAW_ADDR);
-  int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
-  roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR,100,100, 10, 1);
+  delay(2000);
+  int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR);
+  roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR, 10000, 2000, 30, 1);
+  delay(2000);
 }
 
 
@@ -149,9 +141,9 @@ void loop() {
     Serial.println(gyro.gyro.y);
     Serial.println("");
 
-//     roboclaw.BackwardM1(ROBOCLAW_ADDR, 5000);
-  // delay(2000);
-//   roboclaw.ForwardM1(ROBOCLAW_ADDR, 500);
+    //     roboclaw.BackwardM1(ROBOCLAW_ADDR, 5000);
+    // delay(2000);
+    //   roboclaw.ForwardM1(ROBOCLAW_ADDR, 500);
 
     int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
     if (valid) {
@@ -164,11 +156,11 @@ void loop() {
       Serial.println("Encoder reading failed\n");
     }
 
-    int32_t encoders_to_adv = (int32_t) lround((PPR / MM_PER_REV) * 15);  
+    int32_t encoders_to_adv = (int32_t) lround((PPR / MM_PER_REV) * 15);
     Serial.print("encoder to adv: ");
     Serial.println(encoders_to_adv);
-    
-    roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR,100,100, 10, 1);
+
+    roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR, 10000, 2000, 30, 1);
 
     unsigned long now = millis();
     delta_time = now - last_time;
@@ -177,7 +169,7 @@ void loop() {
     Serial.print(delta_time);
     Serial.println(" ms");
     Serial.println("----\n");
+    delay(2000);
   }
   roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
-
-}  
+}

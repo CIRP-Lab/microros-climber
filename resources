@@ -14,9 +14,11 @@ motor documentation:
 https://www.gobilda.com/5203-series-yellow-jacket-planetary-gear-motor-3-7-1-ratio-1620-rpm-3-3-5v-encoder/
 
 Notes:
-Must power arduino board first before supplying 12v power to motor controller
-and must power down 12v power supply / battery before powering on arduino
-I think 38400 baud rate is required for now
+- Must power arduino board first before supplying 12v power to motor controller
+  and must power down 12v power supply / battery before powering on arduino
+- I think 38400 baud rate is required for now
+- MUST use Basic Motion Studio software by Basicmicro to tune the PID parameters in velocity and position.
+  Make sure to tune while connected to the motor which is connected to the linear actuator
 
 buffer:
 Packet Timeout 
