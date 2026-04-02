@@ -1,6 +1,7 @@
 Motor controller documentation:
 https://github.com/basicmicro/roboclaw_arduino_library
 https://downloads.basicmicro.com/docs/roboclaw_user_manual.pdf
+https://downloads.basicmicro.com/docs/roboclaw_datasheet_2x7A.pdf
 
 IMU documentation:
 https://github.com/adafruit/Adafruit_ICM20X
@@ -10,6 +11,7 @@ https://www.gobilda.com/5203-series-yellow-jacket-planetary-gear-motor-3-7-1-rat
 
 Notes:
 Must power arduino board first before supplying 12v power to motor controller
+and must power down 12v power supply / battery before powering on arduino
 I think 38400 baud rate is required for now
 
 buffer:

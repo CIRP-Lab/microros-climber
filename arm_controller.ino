@@ -90,7 +90,10 @@ void setup() {
   roboclaw.BackwardM1(ROBOCLAW_ADDR, 0);
   Serial.println("Setup complete");
   roboclaw.ResetEncoders(ROBOCLAW_ADDR);
+  delay(5000);
   int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
+  if (valid) {Serial.println('enc: '); Serial.println(enc)}
+  else {Serial.println('failure')};
   roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR,100,100, 10, 1);
 }
 
@@ -149,51 +152,43 @@ void loop() {
     Serial.println(gyro.gyro.y);
     Serial.println("");
 
-//     roboclaw.BackwardM1(ROBOCLAW_ADDR, 5000);
-  // delay(2000);
-//   roboclaw.ForwardM1(ROBOCLAW_ADDR, 500);
-
-    int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
-    if (valid) {
-      Serial.print("encoder 1 parts moved: ");
-      Serial.println(enc);
-      Serial.print("Encoder status: \n");
-      Serial.println(status);
-    }
-    else {
-      Serial.println("Encoder reading failed\n");
-    }
-
-    int32_t encoders_to_adv = (int32_t) lround((PPR / MM_PER_REV) * 15);  
-    Serial.print("encoder to adv: ");
-    Serial.println(encoders_to_adv);
+    // int32_t encoders_to_adv = (int32_t) lround((PPR / MM_PER_REV) * 15);  
+    // Serial.print("encoder to adv: ");
+    // Serial.println(encoders_to_adv);
     
     // uint8_t depth1, depth2 = 0;
     // roboclaw.ReadBuffers(ROBOCLAW_ADDR, depth1, depth2);
     // Serial.print("\nbuffer1:"); Serial.println(depth1);
     // Serial.print("\nbuffer 2:"); Serial.println(depth2);
 
-    // if (depth1 == 0) {
-      roboclaw.SpeedAccelDistanceM1(
-        ROBOCLAW_ADDR,
-        100,
-        100,
-        10, // How many 'ticks' to move
-        1
-      );
-    //   Serial.println("\nMoved");
+
+    roboclaw.SpeedAccelDistanceM1(
+      ROBOCLAW_ADDR,
+      100,
+      10,
+      10, // How many 'ticks' to move
+      1
+    );
+    int32_t speed = roboclaw.ReadSpeedM1(ROBOCLAW_ADDR, &status, &valid);
+    Serial.print("speed: "); Serial.println(speed);
+
+
+    // int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
+    // while (!valid) {
+    //   delay(10);   // allow RoboClaw to reset its packet state
+    //   enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
+    // }
+    // if (valid) {
+    //   Serial.print("encoder 1 parts moved: ");
+    //   Serial.println(enc);
+    //   Serial.print("Encoder status: \n");
+    //   Serial.println(status);
+    // }
+    // else {
+    //   Serial.println("Encoder reading failed\n");
     // }
 
-    enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
-    if (valid) {
-      Serial.print("encoder 1 parts moved: ");
-      Serial.println(enc);
-      Serial.print("Encoder status: \n");
-      Serial.println(status);
-    }
-    else {
-      Serial.println("Encoder reading failed\n");
-    }
+
 
     unsigned long now = millis();
     delta_time = now - last_time;
@@ -201,8 +196,11 @@ void loop() {
     Serial.print("Timer: ");
     Serial.print(delta_time);
     Serial.println(" ms");
+    speed = roboclaw.ReadSpeedM1(ROBOCLAW_ADDR, &status, &valid);
+    Serial.print("speed: "); Serial.println(speed);
     Serial.println("----\n");
     delay(1000);
+
   }
   roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
 
