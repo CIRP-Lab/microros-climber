@@ -82,7 +82,7 @@ void setup() {
   roboclaw.ResetEncoders(ROBOCLAW_ADDR);
   delay(2000);
   int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR);
-  roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR, 10000, 2000, 30, 1);
+  roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR, 10000, 2000, 10, 1);
   delay(2000);
 }
 

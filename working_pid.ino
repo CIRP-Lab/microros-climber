@@ -2,77 +2,93 @@
 
 #define address 0x80
 
-HardwareSerial RoboSerial(1);   // UART1
+HardwareSerial RoboSerial(1);
 RoboClaw roboclaw(&RoboSerial, 10000);
 
 void setup() {
-  // Start Serial1 on D8 (RX) and D9 (TX)
-  // Format: Serial1.begin(baud, config, rxPin, txPin);
-    RoboSerial.begin(
+  Serial.begin(38400);
+  Serial.println("Waiting for power to the controller...");
+  delay(15000); // let Serial settle before printing
+
+  RoboSerial.begin(
     38400,
     SERIAL_8N1,
-    D8,   // RX  (optional)
-    D9    // TX  (required)
+    D8,   // RX
+    D9    // TX
   );
+  // DO NOT call roboclaw.begin() — RoboSerial is already initialized above
 
-  
+  Serial.println("Setup complete");
   roboclaw.begin(38400);
-  Serial.begin(38400);
+
+    // Try to read firmware version — simplest possible comms test
+  char version[48];
+  bool ok = roboclaw.ReadVersion(address, version);
+  if (ok) {
+    Serial.print("RoboClaw found! Version: ");
+    Serial.println(version);
+  } else {
+    Serial.println("RoboClaw NOT responding — comms failure");
+  }
 }
 
 void loop() {
-    // Read encoder channel 1
-    int motor_1_count = roboclaw.ReadEncM1(address);
-    Serial.print("Original:");
-    Serial.print(motor_1_count);
-    Serial.print("\n");
-    
-    delay(2000);
+  uint8_t status;
+  bool valid;
+  int32_t motor_1_count;
 
-    // Set encoder
-    roboclaw.SetEncM1(address, 10000);
-    motor_1_count = roboclaw.ReadEncM1(address);
-    Serial.print("After setting count:");
-    Serial.print(motor_1_count);
-    Serial.print("\n");
+  // ── Read original encoder ──────────────────────────────────────────
+  motor_1_count = roboclaw.ReadEncM1(address, &status, &valid);
+  if (valid) {
+    Serial.print("Original: ");
+    Serial.println(motor_1_count);
+  } else {
+    Serial.println("Original: READ FAILED");
+  }
+  delay(2000);
 
-    delay(2000);
+  // ── Set encoder to 1000 then read back ────────────────────────────
+  bool setOk = roboclaw.SetEncM1(address, 1000);
+  Serial.print("SetEncM1 success: ");
+  Serial.println(setOk ? "YES" : "NO");
 
-    // Start motor 1
-//    roboclaw.ForwardM1(address, 64);
-//    delay(500);
-//    int motor_1_speed = roboclaw.ReadSpeedM1(address);
-//    delay(500);
-//    Serial.print("Motor speed:");
-//    Serial.print(motor_1_speed);
-//    Serial.print("\n");
-//    roboclaw.ForwardM1(address,0);
-//
-//    delay(2000);
+  motor_1_count = roboclaw.ReadEncM1(address, &status, &valid);
+  if (valid) {
+    Serial.print("After set: ");
+    Serial.println(motor_1_count);
+  } else {
+    Serial.println("After set: READ FAILED");
+  }
+  // delay(2000);
 
-    // Reset encoders
-    roboclaw.ResetEncoders(address);
-    motor_1_count = roboclaw.ReadEncM1(address);
-    Serial.print("After reset:");
-    Serial.print(motor_1_count);
-    Serial.print("\n");
+  // ── Run motor briefly and read speed ─────────────────────────────
+  // roboclaw.ForwardM1(address, 25);
+  // delay(500);
 
-    delay(2000);
-    roboclaw.BackwardM1(address, 0);
-    // Position the motor
-    roboclaw.SpeedAccelDistanceM1(address, 10000, 2000, 10, 1);
+  uint8_t spd_status;
+  bool spd_valid;
+  int32_t motor_1_speed = roboclaw.ReadSpeedM1(address, &spd_status, &spd_valid);
+  if (spd_valid) {
+    Serial.print("Motor speed: ");
+    Serial.println(motor_1_speed);
+  } else {
+    Serial.println("Speed: READ FAILED");
+  }
 
-    delay(2000);
+  roboclaw.ForwardM1(address, 0);
+  // delay(2000);
+
+  // ── Reset encoders and verify ─────────────────────────────────────
+  bool resetOk = roboclaw.ResetEncoders(address);
+  Serial.print("ResetEncoders success: ");
+  Serial.println(resetOk ? "YES" : "NO");
+
+  motor_1_count = roboclaw.ReadEncM1(address, &status, &valid);
+  if (valid) {
+    Serial.print("After reset: ");
+    Serial.println(motor_1_count);
+  } else {
+    Serial.println("After reset: READ FAILED");
+  }
+  // delay(2000);
 }
-
-//Very interesting, this code SpeedAccelDistanceM1 function works,
-// But when I do the same on our robot arm setup function, the same 
-// SpeecAccelDistance function doesn't work as well. 
-
-// Even when I do BackwardM1 like I did in our original code to see
-// if it was a buffer issue, it still works!!! 
-
-// Debugging was so dumb I moved '#include "RoboClaw.h"' to line 1 instead of line 8 where it was
-// And I guess that fixed everything...
-
-// Basicmicro documentation helped me to tune speec, accel, and pos parameters too, ours originally were too small.
