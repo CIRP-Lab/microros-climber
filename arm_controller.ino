@@ -27,9 +27,132 @@ Adafruit_ICM20948 icm;
 unsigned long last_time = 0;
 unsigned long delta_time;
 bool safetyTriggered;
-bool valid;
-uint8_t status;
 
+// ── PID gains (loaded from RoboClaw) ──────────────────────────────────
+float    KP, KI, KD;
+uint32_t KiMax, DeadZone, PosMin, PosMax;
+
+// ── PID state ─────────────────────────────────────────────────────────
+float    integral   = 0.0f;
+int32_t  lastError  = 0;
+uint32_t lastTimeMs = 0;
+int32_t  targetEnc  = 0;
+bool     pidActive  = false;
+
+// ── Tuning ────────────────────────────────────────────────────────────
+const int32_t MAX_SPEED = 3000;
+const int32_t MIN_SPEED = 50;
+
+// ─────────────────────────────────────────────────────────────────────
+void moveRelative(int32_t ticks) {
+  uint8_t status;
+  bool valid;
+  int32_t current = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
+  if (!valid) {
+    Serial.println("Move aborted: encoder read failed");
+    return;
+  }
+
+  targetEnc  = current + ticks;
+  integral   = 0.0f;
+  lastError  = 0;
+  lastTimeMs = millis();
+  pidActive  = true;
+
+  Serial.print("Moving to encoder: ");
+  Serial.println(targetEnc);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+void updatePID() {
+  if (!pidActive) return;
+
+  // ── Safety ────────────────────────────────────────────────────────
+  if (digitalRead(LINACTSWITCH) == LOW || digitalRead(BACKSWITCH) == LOW) {
+    roboclaw.SpeedM1(ROBOCLAW_ADDR, 0);
+    pidActive = false;
+    integral  = 0.0f;
+    Serial.println("Safety triggered — stopped");
+    return;
+  }
+
+  // ── Read encoder ──────────────────────────────────────────────────
+  uint8_t status;
+  bool valid;
+  int32_t current = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
+  if (!valid) return;
+
+  // ── Time delta ────────────────────────────────────────────────────
+  uint32_t now = millis();
+  float dt = (now - lastTimeMs) / 1000.0f;
+  if (dt <= 0.0f || dt < 0.001f) return;
+  lastTimeMs = now;
+
+  // ── PID math ──────────────────────────────────────────────────────
+  int32_t error = targetEnc - current;
+
+  integral += error * dt;
+  integral  = constrain(integral, -(float)KiMax, (float)KiMax);
+
+  float derivative = (float)(error - lastError) / dt;
+  lastError = error;
+
+  float output = (KP * error) + (KI * integral) + (KD * derivative);
+
+  // ── Within deadzone: hold ─────────────────────────────────────────
+  if (abs(error) <= (int32_t)DeadZone) {
+    int32_t holdSpeed = (int32_t)constrain(output, -(float)MIN_SPEED, (float)MIN_SPEED);
+    roboclaw.SpeedM1(ROBOCLAW_ADDR, holdSpeed);
+    return;
+  }
+
+  // ── Outside deadzone: drive ───────────────────────────────────────
+  int32_t speed = (int32_t)constrain(output, -(float)MAX_SPEED, (float)MAX_SPEED);
+
+  if (speed > 0 && speed <  MIN_SPEED) speed =  MIN_SPEED;
+  if (speed < 0 && speed > -MIN_SPEED) speed = -MIN_SPEED;
+
+  roboclaw.SpeedM1(ROBOCLAW_ADDR, speed);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Returns true once motor is within deadzone of target
+// ─────────────────────────────────────────────────────────────────────
+bool atTarget() {
+  uint8_t status;
+  bool valid;
+  int32_t current = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
+  if (!valid) return false;
+  return abs(targetEnc - current) <= (int32_t)DeadZone;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Runs PID loop until target reached or timeout (ms)
+// ─────────────────────────────────────────────────────────────────────
+void runUntilDone(uint32_t timeoutMs) {
+  uint32_t start = millis();
+  while (!atTarget()) {
+    if (millis() - start > timeoutMs) {
+      Serial.println("WARNING: move timed out");
+      roboclaw.SpeedM1(ROBOCLAW_ADDR, 0);
+      pidActive = false;
+      return;
+    }
+    updatePID();
+  }
+  Serial.println("Target reached");
+}
+
+int32_t getTicksFromMM(int mm) {
+  return (int32_t) lround((PPR / MM_PER_REV) * mm);
+}
+
+void delayWithHoldingPID(int ms) {
+  uint32_t holdStart = millis();
+  while (millis() - holdStart < ms) {
+    updatePID();
+  }
+}
 
 void tcaselect(uint8_t i) {
   if (i > 7) return;
@@ -52,7 +175,6 @@ void setup() {
     D9   // TX  (required)
   );
 
-  roboclaw.begin(38400);
   Wire.begin();
 
   if (!icm.begin_I2C()) {
@@ -73,20 +195,48 @@ void setup() {
       Serial.println(i);
     }
   }
-  roboclaw.SetM1MaxCurrent(ROBOCLAW_ADDR, 7000);
+
+  // ── Load PID gains ──────────────────────────────────────────────
+  bool ok = roboclaw.ReadM1PositionPID(ROBOCLAW_ADDR, KP, KI, KD, KiMax, DeadZone, PosMin, PosMax);
+  if (DeadZone == 0) DeadZone = 1;
+  if (ok) {
+    Serial.println("PID gains loaded:");
+    Serial.print("  KP: ");       Serial.println(KP);
+    Serial.print("  KI: ");       Serial.println(KI);
+    Serial.print("  KD: ");       Serial.println(KD);
+    Serial.print("  KiMax: ");    Serial.println(KiMax);
+    Serial.print("  DeadZone: "); Serial.println(DeadZone);
+
+    // Scale down gains for ESP32 loop rate vs RoboClaw internal rate
+    KP = KP * 0.13f;
+    KI = KI * 0.01f;
+    KD = KD * 0.00f;
+
+    Serial.println("Scaled gains (x0.1):");
+    Serial.print("  KP: "); Serial.println(KP);
+    Serial.print("  KI: "); Serial.println(KI);
+    Serial.print("  KD: "); Serial.println(KD);
+  } else {
+    Serial.println("FAILED to load PID gains — halting");
+    while (1);
+  }
+
 
   safetyTriggered = digitalRead(BACKSWITCH) == LOW;
   while (!safetyTriggered) {
     Serial.println("Setting Up...");
-    roboclaw.BackwardM1(ROBOCLAW_ADDR, 50);
+    roboclaw.BackwardM1(ROBOCLAW_ADDR, 25);
     safetyTriggered = digitalRead(BACKSWITCH) == LOW;
   }
   roboclaw.BackwardM1(ROBOCLAW_ADDR, 0);
   Serial.println("Setup complete");
   roboclaw.ResetEncoders(ROBOCLAW_ADDR);
   delay(2000);
-  int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR);
-  roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR, 10000, 2000, 10, 1);
+    // Drive forward slowly until switch releases
+  while (digitalRead(BACKSWITCH) == LOW) {
+    roboclaw.ForwardM1(ROBOCLAW_ADDR, 15);
+  }
+  roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
   delay(2000);
 }
 
@@ -145,27 +295,15 @@ void loop() {
     Serial.println(gyro.gyro.y);
     Serial.println("");
 
-    //     roboclaw.BackwardM1(ROBOCLAW_ADDR, 5000);
-    // delay(2000);
-    //   roboclaw.ForwardM1(ROBOCLAW_ADDR, 500);
+    Serial.println("=== Moving FORWARD 7cm ===");
+    moveRelative(getTicksFromMM(70));
+    runUntilDone(10000); // 10 sec timeout
 
-    int32_t enc = roboclaw.ReadEncM1(ROBOCLAW_ADDR, &status, &valid);
-    if (valid) {
-      Serial.print("encoder 1 parts moved: ");
-      Serial.println(enc);
-      Serial.print("Encoder status: \n");
-      Serial.println(status);
-    } else {
-      Serial.println("Encoder reading failed\n");
-    }
+    delayWithHoldingPID(2000);
 
-    int32_t encoders_to_adv = (int32_t)lround((PPR / MM_PER_REV) * 15);
-    Serial.print("encoder to adv: ");
-    Serial.println(encoders_to_adv);
-
-    // roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR, 10000, 2000, 6, 1);
-    // roboclaw.SpeedAccelDeccelPositionM1(ROBOCLAW_ADDR,10,2,10,50,1);
-    moveRelative((int32_t)lround((PPR / MM_PER_REV) * 15));
+    Serial.println("=== Moving BACKWARD 7cm ===");
+    moveRelative(getTicksFromMM(-70));
+    runUntilDone(10000);
 
     unsigned long now = millis();
     delta_time = now - last_time;
@@ -174,7 +312,8 @@ void loop() {
     Serial.print(delta_time);
     Serial.println(" ms");
     Serial.println("----\n");
-    delay(10);
+    delayWithHoldingPID(1000);
   }
   roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
+  pidActive = false;
 }

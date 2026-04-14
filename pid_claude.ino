@@ -25,7 +25,7 @@ bool     pidActive  = false;
 
 // ── Tuning ────────────────────────────────────────────────────────────
 const int32_t MAX_SPEED = 3000;
-const int32_t MIN_SPEED = 150;
+const int32_t MIN_SPEED = 50;
 
 // ─────────────────────────────────────────────────────────────────────
 void moveRelative(int32_t ticks) {
@@ -140,7 +140,7 @@ void setup() {
 
   // ── Load PID gains ──────────────────────────────────────────────
   bool ok = roboclaw.ReadM1PositionPID(address, KP, KI, KD, KiMax, DeadZone, PosMin, PosMax);
-  if (DeadZone == 0) DeadZone = 5;
+  if (DeadZone == 0) DeadZone = 1;
   if (ok) {
     Serial.println("PID gains loaded:");
     Serial.print("  KP: ");       Serial.println(KP);
