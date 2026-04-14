@@ -4,7 +4,7 @@
 
 const long PPR        = 103.8;
 const int  MM_PER_REV = 8;
-const int  MOVE_MM    = 50;  // 5 cm
+const int  MOVE_MM    = 70;  // 7 cm
 
 HardwareSerial RoboSerial(1);
 RoboClaw roboclaw(&RoboSerial, 10000);
@@ -69,7 +69,7 @@ void updatePID() {
   // ── Time delta ────────────────────────────────────────────────────
   uint32_t now = millis();
   float dt = (now - lastTimeMs) / 1000.0f;
-  if (dt <= 0.0f) return;
+  if (dt <= 0.0f || dt < 0.001f) return;
   lastTimeMs = now;
 
   // ── PID math ──────────────────────────────────────────────────────
@@ -123,7 +123,6 @@ void runUntilDone(uint32_t timeoutMs) {
       return;
     }
     updatePID();
-    // delay(10); // 100Hz PID loop
   }
   Serial.println("Target reached");
 }
@@ -141,6 +140,7 @@ void setup() {
 
   // ── Load PID gains ──────────────────────────────────────────────
   bool ok = roboclaw.ReadM1PositionPID(address, KP, KI, KD, KiMax, DeadZone, PosMin, PosMax);
+  if (DeadZone == 0) DeadZone = 5;
   if (ok) {
     Serial.println("PID gains loaded:");
     Serial.print("  KP: ");       Serial.println(KP);
@@ -150,8 +150,8 @@ void setup() {
     Serial.print("  DeadZone: "); Serial.println(DeadZone);
 
     // Scale down gains for ESP32 loop rate vs RoboClaw internal rate
-    KP = KP * 0.10f;
-    KI = KI * 0.00f;
+    KP = KP * 0.13f;
+    KI = KI * 0.01f;
     KD = KD * 0.00f;
 
     Serial.println("Scaled gains (x0.1):");
@@ -172,8 +172,8 @@ void setup() {
 void loop() {
   int32_t ticks = (int32_t)lround((PPR / MM_PER_REV) * MOVE_MM);
 
-  // ── Forward 5cm ───────────────────────────────────────────────────
-  Serial.println("=== Moving FORWARD 5cm ===");
+  // ── Forward 7cm ───────────────────────────────────────────────────
+  Serial.println("=== Moving FORWARD 7cm ===");
   moveRelative(ticks);
   runUntilDone(10000); // 10 sec timeout
 
@@ -181,11 +181,10 @@ void loop() {
   uint32_t holdStart = millis();
   while (millis() - holdStart < 5000) {
     updatePID(); // keep holding position during the delay
-    delay(10);
   }
 
-  // ── Backward 5cm ──────────────────────────────────────────────────
-  Serial.println("=== Moving BACKWARD 5cm ===");
+  // ── Backward 7cm ──────────────────────────────────────────────────
+  Serial.println("=== Moving BACKWARD 7cm ===");
   moveRelative(-ticks);
   runUntilDone(10000);
 
@@ -193,6 +192,5 @@ void loop() {
   holdStart = millis();
   while (millis() - holdStart < 5000) {
     updatePID();
-    delay(10);
   }
 }

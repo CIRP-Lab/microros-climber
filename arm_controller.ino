@@ -12,7 +12,7 @@
 
 #define ROBOCLAW_ADDR 0x80
 
-HardwareSerial RoboSerial(1);   // UART1
+HardwareSerial RoboSerial(1);  // UART1
 RoboClaw roboclaw(&RoboSerial, 10000);
 
 const int LINACTSWITCH = D2;
@@ -30,6 +30,7 @@ bool safetyTriggered;
 bool valid;
 uint8_t status;
 
+
 void tcaselect(uint8_t i) {
   if (i > 7) return;
   Wire.beginTransmission(TCAADDR);
@@ -40,41 +41,44 @@ void tcaselect(uint8_t i) {
 void setup() {
   pinMode(LINACTSWITCH, INPUT_PULLUP);
   pinMode(BACKSWITCH, INPUT_PULLUP);
+  Serial.begin(38400);
+  Serial.println("Waiting for motor controller power supply");
+  delay(15000);
 
   RoboSerial.begin(
     38400,
     SERIAL_8N1,
-    D8,   // RX  (optional)
-    D9    // TX  (required)
+    D8,  // RX  (optional)
+    D9   // TX  (required)
   );
 
   roboclaw.begin(38400);
-  Serial.begin(38400);
   Wire.begin();
 
   if (!icm.begin_I2C()) {
     Serial.println("ICM20948 not found");
-    while (1);
+    while (1)
+      ;
   }
   Serial.println("ICM20948 OK");
 
- // Initialize sensors on each port
- for (uint8_t i = 0; i < 8; i++) {
-   tcaselect(i);
-   if (!lox.begin()) {
-     Serial.print("Sensor not found on port ");
-     Serial.println(i);
-   } else {
-     Serial.print("Sensor OK on port ");
-     Serial.println(i);
-   }
- }
- roboclaw.SetM1MaxCurrent(ROBOCLAW_ADDR, 7000);
+  // Initialize sensors on each port
+  for (uint8_t i = 0; i < 8; i++) {
+    tcaselect(i);
+    if (!lox.begin()) {
+      Serial.print("Sensor not found on port ");
+      Serial.println(i);
+    } else {
+      Serial.print("Sensor OK on port ");
+      Serial.println(i);
+    }
+  }
+  roboclaw.SetM1MaxCurrent(ROBOCLAW_ADDR, 7000);
 
   safetyTriggered = digitalRead(BACKSWITCH) == LOW;
   while (!safetyTriggered) {
     Serial.println("Setting Up...");
-    roboclaw.BackwardM1(ROBOCLAW_ADDR, 25);
+    roboclaw.BackwardM1(ROBOCLAW_ADDR, 50);
     safetyTriggered = digitalRead(BACKSWITCH) == LOW;
   }
   roboclaw.BackwardM1(ROBOCLAW_ADDR, 0);
@@ -151,16 +155,17 @@ void loop() {
       Serial.println(enc);
       Serial.print("Encoder status: \n");
       Serial.println(status);
-    }
-    else {
+    } else {
       Serial.println("Encoder reading failed\n");
     }
 
-    int32_t encoders_to_adv = (int32_t) lround((PPR / MM_PER_REV) * 15);
+    int32_t encoders_to_adv = (int32_t)lround((PPR / MM_PER_REV) * 15);
     Serial.print("encoder to adv: ");
     Serial.println(encoders_to_adv);
 
-    roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR, 10000, 2000, 30, 1);
+    // roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR, 10000, 2000, 6, 1);
+    // roboclaw.SpeedAccelDeccelPositionM1(ROBOCLAW_ADDR,10,2,10,50,1);
+    moveRelative((int32_t)lround((PPR / MM_PER_REV) * 15));
 
     unsigned long now = millis();
     delta_time = now - last_time;
@@ -169,7 +174,7 @@ void loop() {
     Serial.print(delta_time);
     Serial.println(" ms");
     Serial.println("----\n");
-    delay(2000);
+    delay(10);
   }
   roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
 }
