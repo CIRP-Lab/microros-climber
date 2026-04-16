@@ -40,7 +40,7 @@ int32_t  targetEnc  = 0;
 bool     pidActive  = false;
 
 // ── Tuning ────────────────────────────────────────────────────────────
-const int32_t MAX_SPEED = 3000;
+const int32_t MAX_SPEED = 10000;
 const int32_t MIN_SPEED = 50;
 
 // ─────────────────────────────────────────────────────────────────────
@@ -224,8 +224,7 @@ void setup() {
 
   safetyTriggered = digitalRead(BACKSWITCH) == LOW;
   while (!safetyTriggered) {
-    Serial.println("Setting Up...");
-    roboclaw.BackwardM1(ROBOCLAW_ADDR, 25);
+    roboclaw.BackwardM1(ROBOCLAW_ADDR, 75);
     safetyTriggered = digitalRead(BACKSWITCH) == LOW;
   }
   roboclaw.BackwardM1(ROBOCLAW_ADDR, 0);
@@ -295,15 +294,15 @@ void loop() {
     Serial.println(gyro.gyro.y);
     Serial.println("");
 
-    Serial.println("=== Moving FORWARD 7cm ===");
-    moveRelative(getTicksFromMM(70));
-    runUntilDone(10000); // 10 sec timeout
+    tcaselect(2); // port 2
+    lox.rangingTest(&measure, false);
+    if (measure.RangeStatus != 4) {
+      Serial.println("=== Moving FORWARD 7cm ===");
+      moveRelative(getTicksFromMM(measure.RangeMilliMeter));
+      runUntilDone(10000); // 10 sec timeout
+     }
 
-    delayWithHoldingPID(2000);
-
-    Serial.println("=== Moving BACKWARD 7cm ===");
-    moveRelative(getTicksFromMM(-70));
-    runUntilDone(10000);
+    delayWithHoldingPID(5000);
 
     unsigned long now = millis();
     delta_time = now - last_time;
@@ -312,7 +311,7 @@ void loop() {
     Serial.print(delta_time);
     Serial.println(" ms");
     Serial.println("----\n");
-    delayWithHoldingPID(1000);
+    delayWithHoldingPID(2000);
   }
   roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
   pidActive = false;
