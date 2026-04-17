@@ -20,6 +20,7 @@ const int BACKSWITCH = D3;
 
 const long PPR = 103.8;
 const int MM_PER_REV = 8;
+const int PORT_2_DISTANCE_TO_WALL_MM = 280;
 
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
 Adafruit_ICM20948 icm;
@@ -224,19 +225,19 @@ void setup() {
 
   safetyTriggered = digitalRead(BACKSWITCH) == LOW;
   while (!safetyTriggered) {
-    roboclaw.BackwardM1(ROBOCLAW_ADDR, 75);
+    roboclaw.BackwardM1(ROBOCLAW_ADDR, 50);
     safetyTriggered = digitalRead(BACKSWITCH) == LOW;
   }
   roboclaw.BackwardM1(ROBOCLAW_ADDR, 0);
   Serial.println("Setup complete");
   roboclaw.ResetEncoders(ROBOCLAW_ADDR);
-  delay(2000);
+  
     // Drive forward slowly until switch releases
   while (digitalRead(BACKSWITCH) == LOW) {
-    roboclaw.ForwardM1(ROBOCLAW_ADDR, 15);
+    roboclaw.ForwardM1(ROBOCLAW_ADDR, 75);
   }
+  // roboclaw.SpeedAccelDistanceM1(ROBOCLAW_ADDR, 10000, 2000, 15, 1);
   roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
-  delay(2000);
 }
 
 
@@ -297,8 +298,8 @@ void loop() {
     tcaselect(2); // port 2
     lox.rangingTest(&measure, false);
     if (measure.RangeStatus != 4) {
-      Serial.println("=== Moving FORWARD 7cm ===");
-      moveRelative(getTicksFromMM(measure.RangeMilliMeter));
+      Serial.println("=== Moving towards trunk ===");
+      moveRelative(getTicksFromMM(measure.RangeMilliMeter - PORT_2_DISTANCE_TO_WALL_MM));
       runUntilDone(10000); // 10 sec timeout
      }
 
