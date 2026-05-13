@@ -1,33 +1,16 @@
 #include "RoboClaw.h"
-#include <Wire.h>
-#include <Adafruit_VL53L0X.h>
-#include <Adafruit_ICM20948.h>
-#include <Adafruit_ICM20X.h>
-#include <Adafruit_Sensor.h>
 
-// TEST LIBRARY: In the future, use new library:
-//               https://github.com/basicmicro/basicmicro_arduino
-//#include <Basicmicro.h>
-
-#define TCAADDR 0x70
 #define ROBOCLAW_ADDR 0x80
 
 HardwareSerial RoboSerial(1);  // UART1
 RoboClaw roboclaw(&RoboSerial, 10000);
 
-const int LINACTSWITCH = D2; // Fully extended arm
-const int BACKSWITCH = D3; // Fully retracted arm
+const int LINACTSWITCH = D2;
+const int BACKSWITCH = D3;
 
 const long PPR = 103.8;
 const int MM_PER_REV = 8;
-const int PORT_2_DISTANCE_TO_WALL_MM = 280; 
-const int LOOP_DELAY_MS = 5000;
 
-Adafruit_VL53L0X lox = Adafruit_VL53L0X();
-Adafruit_ICM20948 icm;
-
-unsigned long last_time = 0;
-unsigned long delta_time;
 bool safetyTriggered;
 
 // ── PID gains (loaded from RoboClaw) ──────────────────────────────────
@@ -45,6 +28,7 @@ bool     pidActive  = false;
 const int32_t MAX_SPEED = 10000;
 const int32_t MIN_SPEED = 50;
 
+// ─────────────────────────────────────────────────────────────────────
 void moveRelative(int32_t ticks) {
   uint8_t status;
   bool valid;
@@ -64,6 +48,7 @@ void moveRelative(int32_t ticks) {
   Serial.println(targetEnc);
 }
 
+// ─────────────────────────────────────────────────────────────────────
 void updatePID() {
   if (!pidActive) return;
 
@@ -143,17 +128,10 @@ void runUntilDone(uint32_t timeoutMs) {
   Serial.println("Target reached");
 }
 
-void moveToPos(int32_t ticks, uint32_t timeoutMs) {
-  moveRelative(ticks);
-  runUntilDone(timeoutMs); // 10 sec timeout
-}
-
-// convert tickets from mm
 int32_t getTicksFromMM(int mm) {
   return (int32_t) lround((PPR / MM_PER_REV) * mm);
 }
 
-// Use instead of delay() to continue PID function
 void delayWithHoldingPID(int ms) {
   uint32_t holdStart = millis();
   while (millis() - holdStart < ms) {
@@ -161,55 +139,35 @@ void delayWithHoldingPID(int ms) {
   }
 }
 
-// Select an port on the multiplexer from 0 - 7 to begin communication with
-// Port corresponds to the TOF sensor we want data from
-void tcaselect(uint8_t i) {
-  if (i > 7) return;
-  Wire.beginTransmission(TCAADDR);
-  Wire.write(1 << i);
-  Wire.endTransmission();
-}
+bool backSwitchTriggered()   { return digitalRead(BACKSWITCH)   == LOW; }
+bool linactSwitchTriggered() { return digitalRead(LINACTSWITCH) == LOW; }
+
 
 void setup() {
-  pinMode(LINACTSWITCH, INPUT_PULLUP);
-  pinMode(BACKSWITCH, INPUT_PULLUP);
   Serial.begin(38400);
+  delay(500);
 
-  // If using power supply connected to the Roboclaw motor controller, 
-  // We must wait for power supply to turn on after arduino gets power,
-  // But before the communication handshake protocol can be setup
-  Serial.println("Waiting for motor controller power supply");
+  Serial.println("╔══════════════════════════════════════╗");
+  Serial.println("║   LINEAR ACTUATOR UNIT TEST           ║");
+  Serial.println("╚══════════════════════════════════════╝");
+  Serial.println("Waiting 15s for motor controller...");
   delay(15000);
-  // Roboclaw handshake protocol
-  RoboSerial.begin(
-    38400,
-    SERIAL_8N1,
-    D8,  // RX  (optional)
-    D9   // TX  (required)
-  );
 
-  Wire.begin();
+  RoboSerial.begin(38400, SERIAL_8N1, D8, D9);
 
-  if (!icm.begin_I2C()) {
-    Serial.println("ICM20948 not found");
-    while (1)
-      ;
-  }
-  Serial.println("ICM20948 OK");
-
-  // Initialize sensors on each port
-  for (uint8_t i = 0; i < 8; i++) {
-    tcaselect(i);
-    if (!lox.begin()) {
-      Serial.print("Sensor not found on port ");
-      Serial.println(i);
-    } else {
-      Serial.print("Sensor OK on port ");
-      Serial.println(i);
-    }
+  // Sanity check: make sure we can talk to the RoboClaw
+  uint16_t version;
+  if (!roboclaw.ReadVersion(ROBOCLAW_ADDR, &version)) {
+    Serial.println("[FAIL] Cannot communicate with RoboClaw — halting");
+    state = TEST_FAILED;
+    return;
   }
 
-  // ── Load PID gains ──────────────────────────────────────────────
+  Serial.println("[OK] RoboClaw detected");
+  if (linactSwitchTriggered()) {
+    Serial.println("[WARN] LINACTSWITCH already triggered at startup");
+  }
+
   bool ok = roboclaw.ReadM1PositionPID(ROBOCLAW_ADDR, KP, KI, KD, KiMax, DeadZone, PosMin, PosMax);
   if (DeadZone == 0) DeadZone = 1;
   if (ok) {
@@ -234,107 +192,4 @@ void setup() {
     while (1);
   }
 
-  // Setting up encoder positioning
-  // Retract fully and reset encoder positioning to zero
-  safetyTriggered = digitalRead(BACKSWITCH) == LOW;
-  while (!safetyTriggered) {
-    roboclaw.BackwardM1(ROBOCLAW_ADDR, 50);
-    safetyTriggered = digitalRead(BACKSWITCH) == LOW;
-  }
-  roboclaw.BackwardM1(ROBOCLAW_ADDR, 0);
-  Serial.println("Setup complete");
-  roboclaw.ResetEncoders(ROBOCLAW_ADDR);
-  
-    // Drive forward slowly until switch releases
-  while (digitalRead(BACKSWITCH) == LOW) {
-    roboclaw.ForwardM1(ROBOCLAW_ADDR, 75);
-  }
-  roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
-}
-
-void printImuReadings() {
-    // Display IMU sensor readings
-    sensors_event_t accel, gyro, mag, temp;
-    icm.getEvent(&accel, &gyro, &temp, &mag);
-    Serial.println("");
-    Serial.print("Temperature ");
-    Serial.print(temp.temperature);
-    Serial.println(" deg C");
-
-    /* Display the results (acceleration is measured in m/s^2) */
-    Serial.print("Accel X: ");
-    Serial.print(accel.acceleration.x);
-    Serial.print("\tY: ");
-    Serial.print(accel.acceleration.y);
-    Serial.print(" \tZ: ");
-    Serial.print(accel.acceleration.z);
-    Serial.println(" m/s^2 ");
-
-    Serial.print("Mag X: ");
-    Serial.print(mag.magnetic.x);
-    Serial.print(" \tY: ");
-    Serial.print(mag.magnetic.y);
-    Serial.print(" \tZ: ");
-    Serial.print(mag.magnetic.z);
-    Serial.println(" uT");
-
-    Serial.print("Gyro X: ");
-    Serial.print(gyro.gyro.x);
-    Serial.print(" \tY: ");
-    Serial.println(gyro.gyro.y);
-    Serial.println("");
-}
-
-
-void loop() {
-  VL53L0X_RangingMeasurementData_t measure;
-  safetyTriggered = (digitalRead(LINACTSWITCH) == LOW || digitalRead(BACKSWITCH) == LOW);
-
-  // Shut down actuator and sensor operations if safety switch hit.
-  // Will fix test code to allow for movement that moves off safety switch in the future
-  while (!safetyTriggered) {
-    safetyTriggered = (digitalRead(LINACTSWITCH) == LOW || digitalRead(BACKSWITCH) == LOW);
-
-    // ── TOF sensor readings ──────────────────────────────────────────────
-    // Iterate through available TOF sensors, print distance info of each
-    for (uint8_t i = 0; i < 8; i++) {
-      if (i == 3 || i == 4 || i == 5) continue;
-      tcaselect(i);
-      lox.rangingTest(&measure, false);
-      Serial.print("Port ");
-      Serial.print(i);
-      Serial.print(": ");
-      if (measure.RangeStatus != 4) {
-        Serial.print(measure.RangeMilliMeter);
-        Serial.println(" mm");
-      } else {
-        Serial.println("Out of range");
-      }
-    }
-    
-    printImuReadings();
-
-    // ── Actuator arm to trunk test ──────────────────────────────────────────────
-    tcaselect(2); // Read distance from front facing TOF sensor to trunk
-    lox.rangingTest(&measure, false);
-    if (measure.RangeStatus != 4) {
-      Serial.println("=== Moving towards trunk ===");
-      int32_t distanceToMove = getTicksFromMM(measure.RangeMilliMeter - PORT_2_DISTANCE_TO_WALL_MM);
-      moveToPos(distanceToMove, 10000);
-     }
-
-    // Delay function
-    delayWithHoldingPID(LOOP_DELAY_MS);
-
-    // Print time to complete a single loop
-    unsigned long now = millis();
-    delta_time = now - last_time - LOOP_DELAY_MS;
-    last_time = now;
-    Serial.print("Timer: ");
-    Serial.print(delta_time);
-    Serial.println(" ms");
-    Serial.println("----\n");
-  }
-  roboclaw.ForwardM1(ROBOCLAW_ADDR, 0);
-  pidActive = false;
 }
